@@ -1,5 +1,6 @@
 run:
 	echo "Running..."
+	go build
 	./pokedexcli
 
 test:
