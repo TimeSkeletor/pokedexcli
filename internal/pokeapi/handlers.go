@@ -14,6 +14,14 @@ func (c *Client) GenericGetList(pageURL *string, path  string) (PaginationRespon
         url = baseURL + path
     }
 	
+	if cachedData, found := c.cache.Get(url); found {
+		res := PaginationResponse{}
+		err := json.Unmarshal(cachedData, &res)
+		if err == nil {
+			return res, nil
+		}
+	}
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return PaginationResponse{}, err
