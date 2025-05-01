@@ -7,8 +7,13 @@ import (
 )
 
 func (c *Client) GenericGetList(pageURL *string, path  string) (PaginationResponse, error) {
-	url := baseURL + path
-
+    var url string
+    if pageURL != nil {
+        url = *pageURL
+    } else {
+        url = baseURL + path
+    }
+	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return PaginationResponse{}, err

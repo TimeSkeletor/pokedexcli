@@ -9,10 +9,13 @@ import (
 	"github.com/timeskeletor/pokedexcli/internal/pokeapi"
 )
 
+const (
+	replMsg = "Pokedex > "
+)
 type config struct {
 	pokeapiClient    pokeapi.Client
-	nextLocationsURL *string
-	prevLocationsURL *string
+	nextPageURL *string
+	prevPageURL *string
 }
 
 type cliCommand struct {
@@ -25,8 +28,7 @@ type cliCommand struct {
 func startRepl(cfg *config) {
 	reader := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Println("Welcome to the Pokedex!")
-		fmt.Print("Pokedex > ")
+		fmt.Print(replMsg)
 		reader.Scan()
 
 		words := cleanInput(reader.Text())
@@ -44,7 +46,7 @@ func startRepl(cfg *config) {
 			}
 			continue
 		} else {
-			fmt.Println("Unknown command")
+			fmt.Println(replMsg, "Unknown command")
 			continue
 		}
 	}

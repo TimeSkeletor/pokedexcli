@@ -33,8 +33,7 @@ func getCommands() map[string]cliCommand {
 
 
 func commandHelp(cfg *config) error {
-	fmt.Println("Welcome to the Pokedex!\n")
-	fmt.Println("Usage:\n")
+	fmt.Println("Usage:")
 
 	for _, cmd := range getCommands() {
 		fmt.Printf("- %s - %s\n", cmd.name, cmd.description) 
@@ -45,13 +44,13 @@ func commandHelp(cfg *config) error {
 
 
 func commandMapf(cfg *config) error {
-	locationsResp, err := cfg.pokeapiClient.GenericGetList(cfg.nextLocationsURL, "location-area")
+	locationsResp, err := cfg.pokeapiClient.GenericGetList(cfg.nextPageURL, "location-area")
 	if err != nil {
 		return err
 	}
 
-	cfg.nextLocationsURL = locationsResp.Next
-	cfg.prevLocationsURL = locationsResp.Previous
+	cfg.nextPageURL = locationsResp.Next
+	cfg.prevPageURL = locationsResp.Previous
 
 	for _, loc := range locationsResp.Results {
 		fmt.Println(loc.Name)
@@ -60,17 +59,17 @@ func commandMapf(cfg *config) error {
 }
 
 func commandMapb(cfg *config) error {
-	if cfg.prevLocationsURL == nil {
+	if cfg.prevPageURL == nil {
 		return errors.New("you're on the first page")
 	}
 
-	locationResp, err := cfg.pokeapiClient.GenericGetList(cfg.prevLocationsURL, "location-area")
+	locationResp, err := cfg.pokeapiClient.GenericGetList(cfg.prevPageURL, "location-area")
 	if err != nil {
 		return err
 	}
 
-	cfg.nextLocationsURL = locationResp.Next
-	cfg.prevLocationsURL = locationResp.Previous
+	cfg.nextPageURL = locationResp.Next
+	cfg.prevPageURL = locationResp.Previous
 
 	for _, loc := range locationResp.Results {
 		fmt.Println(loc.Name)
@@ -79,11 +78,8 @@ func commandMapb(cfg *config) error {
 }
 
 func commandExit(cfg *config) error {
-	fmt.Print("Closing the Pokedex... Goodbye!")
+	fmt.Println(replMsg, "Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandNotFound(cfg *config) error {
-	return errors.New("command not found")
-}
