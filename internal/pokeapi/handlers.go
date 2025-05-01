@@ -44,6 +44,7 @@ func (c *Client) GenericGetList(pageURL *string, path  string) (PaginationRespon
 		return PaginationResponse{}, err
 	}
 
+	c.cache.Add(url, dat)
 	return res, nil
 }
 

@@ -3,20 +3,22 @@ package pokeapi
 import (
 	"net/http"
 	"time"
+
+	"github.com/timeskeletor/pokedexcli/internal/pokecache"
 )
 
 // Client -
 type Client struct {
+	cache      pokecache.Cache
 	httpClient http.Client
-	cache *Cache
 }
 
 // NewClient -
-func NewClient(timeout time.Duration) Client {
+func NewClient(timeout, cacheInterval time.Duration) Client {
 	return Client{
+		cache: pokecache.NewCache(cacheInterval),
 		httpClient: http.Client{
 			Timeout: timeout,
 		},
-		cache: NewCache(5 * time.Minute),
 	}
 }

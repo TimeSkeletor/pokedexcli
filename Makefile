@@ -5,4 +5,4 @@ run:
 
 test:
 	echo "Testing..."
-	go test ./
+	go test ./...
