@@ -5,11 +5,27 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/timeskeletor/pokedexcli/internal/pokeapi"
 )
 
-func startRepl() {
+type config struct {
+	pokeapiClient    pokeapi.Client
+	nextLocationsURL *string
+	prevLocationsURL *string
+}
+
+type cliCommand struct {
+	name        string
+	description string
+	callback    func(*config) error
+}
+
+
+func startRepl(cfg *config) {
 	reader := bufio.NewScanner(os.Stdin)
 	for {
+		fmt.Println("Welcome to the Pokedex!")
 		fmt.Print("Pokedex > ")
 		reader.Scan()
 
@@ -20,7 +36,17 @@ func startRepl() {
 
 		commandName := words[0]
 
-		fmt.Printf("Your command was: %s\n", commandName)
+		command, exists := getCommands()[commandName]
+		if exists {
+			err := command.callback(cfg)
+			if err != nil {
+				fmt.Println(err)
+			}
+			continue
+		} else {
+			fmt.Println("Unknown command")
+			continue
+		}
 	}
 }
 
