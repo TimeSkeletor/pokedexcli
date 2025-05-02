@@ -15,7 +15,13 @@ func getTables() map[string]table {
 				"id": field{
 					dataType: "integer primary key autoincrement",
 				},
+				"number": field{
+					dataType: "integer not null",
+				},
 				"name": field{
+					dataType: "text not null",
+				},
+				"region": field{
 					dataType: "text not null",
 				},
 				"caught": field{
