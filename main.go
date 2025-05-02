@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/timeskeletor/pokedexcli/internal/pokeapi"
+	"github.com/timeskeletor/pokedexcli/internal/pokedatabase"
 )
 
 func main() {
@@ -11,6 +12,6 @@ func main() {
 	cfg := &config{
 		pokeapiClient: pokeClient,
 	}
-
+	pokedatabase.SetDb()
 	startRepl(cfg)
 }
