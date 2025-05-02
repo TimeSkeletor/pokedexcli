@@ -16,7 +16,7 @@ func main() {
     cfg := &config.Config{
         PokeapiClient: pokeClient,
         PokeDb:        &pokedatabase.Database{},
-        CaughtPkmn:    make(map[string]pokeapi.PokemonSpecies),
+        CaughtPkmn:    make(map[string]pokeapi.Pokemon),
     }
 
     // Initialize database

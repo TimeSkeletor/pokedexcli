@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"time"
 
-	"crawshaw.io/sqlite"
 	"github.com/timeskeletor/pokedexcli/config"
 )
 
@@ -36,61 +35,31 @@ func (c catchCommand) GetCallback(cfg *config.Config, args ...string) error {
     }
 
     // Check if Pokémon is already registered
-    _, _, err = cfg.PokeDb.FetchPokemon(ctx, "pokemon", pkmn.ID)
-    if err == nil {
-        // Pokémon exists, check if it's already caught
-        var caught bool
-        err = cfg.PokeDb.ExecQuery(ctx, "SELECT caught FROM pokemon WHERE number = ?", func(stmt *sqlite.Stmt) error {
-            caught = stmt.GetInt64("caught") == 1
-            return nil
-        }, pkmn.ID)
-        if err != nil {
-            return fmt.Errorf("failed to check Pokémon status: %w", err)
-        }
-        if caught {
-            fmt.Printf("%s is already registered!\n", pkmn.Name)
-            return nil
-        }
-        // Update caught status
+    caught := cfg.PokeDb.FetchPokemon(ctx, "pokemon", pkmn.ID)
+    fmt.Printf("A wild %s, appeared! Is caught: %d\n", pkmn.Name, caught)
+    cfg.PokeDb.RegisterPokemon(ctx, pkmn)
+
+    switch caught {
+    case 1:
+        fmt.Printf("%s is already caught!\n", pkmn.Name)
+        return nil
+    case 0:
         fmt.Printf("Throwing a Pokeball at %s...\n", pkmn.Name)
         roll := rand.Intn(256)
         isShiny := rand.Intn(4096) == 0
-        if roll <= pkmn.CaptureRate {
+        captureChance := roll <= pkmn.CaptureRate
+
+        if captureChance {
             fmt.Println("Gotcha! You caught", pkmn.Name)
             if isShiny {
                 fmt.Println("✨ Whoa! It's a shiny", pkmn.Name+"!")
             }
-            err = cfg.PokeDb.CatchPokemon(ctx, "pokemon", pkmn.ID)
-            if err != nil {
-                return fmt.Errorf("failed to update caught status: %w", err)
-            }
-            cfg.CaughtPkmn[pkmn.Name] = pkmn
+            cfg.PokeDb.CatchPokemon(ctx, "pokemon", pkmn.ID, isShiny)
             return nil
         }
         fmt.Println(pkmn.Name, "escaped!")
         return nil
     }
 
-    // Pokémon doesn't exist, register it
-    fmt.Printf("Throwing a Pokeball at %s...\n", pkmn.Name)
-    roll := rand.Intn(256)
-    isShiny := rand.Intn(4096) == 0
-    caught := roll <= pkmn.CaptureRate
-    if caught {
-        fmt.Println("Gotcha! You caught", pkmn.Name)
-        if isShiny {
-            fmt.Println("✨ Whoa! It's a shiny", pkmn.Name+"!")
-        }
-    } else {
-        fmt.Println(pkmn.Name, "escaped!")
-    }
-
-    err = cfg.PokeDb.RegisterPokemon(ctx, pkmn, caught, isShiny)
-    if err != nil {
-        return fmt.Errorf("failed to register Pokémon: %w", err)
-    }
-    if caught {
-        cfg.CaughtPkmn[pkmn.Name] = pkmn
-    }
     return nil
 }

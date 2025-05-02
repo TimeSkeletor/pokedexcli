@@ -14,7 +14,7 @@ const (
 type Config struct {
 	PokeapiClient	 pokeapi.Client
 	PokeDb			*pokedatabase.Database
-	CaughtPkmn		map[string]pokeapi.PokemonSpecies
+	CaughtPkmn		map[string]pokeapi.Pokemon
 	NextPageURL 	*string
 	PrevPageURL 	*string
 }

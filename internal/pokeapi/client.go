@@ -10,6 +10,7 @@ import (
 // Client -
 type Client struct {
 	cache      		pokecache.Cache
+	caughtPkmn      map[string]Pokemon
 	httpClient 		http.Client
 }
 

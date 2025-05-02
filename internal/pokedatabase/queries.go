@@ -28,52 +28,40 @@ func getGender(genderRate int) int {
 	return 0
 }
 
-func (db *Database) FetchPokemon(ctx context.Context, table string, number int) (int, string, error) {
+func (db *Database) FetchPokemon(ctx context.Context, table string, number int) int {
     if table != "pokemon" {
-        return 0, "", fmt.Errorf("invalid table name: %s", table)
+        panic(fmt.Sprintf("invalid table name: %s", table))
     }
-    query := "SELECT number, name FROM pokemon WHERE number = ? LIMIT 1"
-    var foundNumber int
-    var foundName string
+    query := "SELECT caught FROM pokemon WHERE number = ? LIMIT 1"
+    var caught int
     err := db.ExecQuery(ctx, query, func(stmt *sqlite.Stmt) error {
-        foundNumber = int(stmt.GetInt64("number"))
-        foundName = stmt.GetText("name")
+        caught = int(stmt.GetInt64("caught"))
+        log.Printf("ℹ️ [FetchPokemon] Pokémon #%d found, caught: %d", number, caught)
         return nil
     }, number)
     if err != nil {
-        log.Printf("ℹ️ [FetchPokemon] No Pokemon found for number %d: %v", number, err)
-        return 0, "", fmt.Errorf("failed to fetch Pokemon: %w", err)
+        log.Printf("ℹ️ [FetchPokemon] Error querying Pokémon #%d: %v", number, err)
+        return 0
     }
-    if foundNumber == 0 {
-        log.Printf("ℹ️ [FetchPokemon] No Pokemon found for number %d", number)
-        return 0, "", fmt.Errorf("pokemon not found")
-    }
-    return foundNumber, foundName, nil
+    return caught
 }
 
-func (db *Database) CatchPokemon(ctx context.Context, table string, number int) error {
+func (db *Database) CatchPokemon(ctx context.Context, table string, number int, isShiny bool) error {
     if table != "pokemon" {
-        return fmt.Errorf("invalid table name: %s", table)
+        panic(fmt.Sprintf("invalid table name: %s", table))
     }
-    log.Printf("📌 Updating caught status for Pokemon #%d", number)
-
-    // Check if Pokemon exists
-    _, _, err := db.FetchPokemon(ctx, table, number)
-    if err != nil {
-        log.Printf("ℹ️ [CatchPokemon] No Pokemon found for number %d: %v", number, err)
-        return fmt.Errorf("pokemon not found: %w", err)
-    }
+    log.Printf("📌 [CatchPokemon] Catching Pokemon #%d. [Shiny: %v]", number, isShiny)
 
     // Update in a transaction for atomicity
     caughtAt := time.Now().Format("2006-01-02 15:04:05") // SQLite-compatible format
-    query := "UPDATE pokemon SET caught = ?, caught_at = ? WHERE number = ?"
+    query := "UPDATE pokemon SET caught = ?, is_shiny = ?, caught_at = ? WHERE number = ?"
     return db.WithTransaction(ctx, func(conn *sqlite.Conn) error {
-        return sqlitex.Exec(conn, query, nil, 1, caughtAt, number)
+        return sqlitex.Exec(conn, query, nil, 1, isShiny, caughtAt, number)
     })
 }
 
-func (db *Database) RegisterPokemon(ctx context.Context, pkmn pokeapi.PokemonSpecies, caught bool, isShiny bool) error {
-    log.Printf("📥 [RegisterPokemon] Inserting Pokemon %s (#%d) into DB [Caught: %v, Shiny: %v]", pkmn.Name, pkmn.ID, caught, isShiny)
+func (db *Database) RegisterPokemon(ctx context.Context, pkmn pokeapi.PokemonSpecies) {
+    log.Printf("📥 [RegisterPokemon] Inserting Pokemon %s (#%d) into DB", pkmn.Name, pkmn.ID)
 
     query := `INSERT INTO pokemon 
     (number, name, gender, capture_rate, base_happiness, is_baby, is_legendary, is_mythical, is_shiny, sprite_path, caught, caught_at) 
@@ -81,18 +69,10 @@ func (db *Database) RegisterPokemon(ctx context.Context, pkmn pokeapi.PokemonSpe
 
     gender := getGender(pkmn.GenderRate)
     pkmnSpritePath := asset_path + fmt.Sprintf("%d%s", pkmn.ID, img_type)
-    var caughtAt interface{}
-    if caught {
-        caughtAt = time.Now().Format("2006-01-02 15:04:05")
-    } else {
-        caughtAt = nil // NULL for uncaught Pokemon
-    }
 
-    err := db.ExecQuery(ctx, query, nil, pkmn.ID, pkmn.Name, gender, pkmn.CaptureRate, pkmn.BaseHappiness, pkmn.IsBaby, pkmn.IsLegendary, pkmn.IsMythical, isShiny, pkmnSpritePath, caught, caughtAt)
+    err := db.ExecQuery(ctx, query, nil, pkmn.ID, pkmn.Name, gender, pkmn.CaptureRate, pkmn.BaseHappiness, pkmn.IsBaby, pkmn.IsLegendary, pkmn.IsMythical, 0, pkmnSpritePath, 0, nil)
     if err != nil {
-        log.Printf("❌ [RegisterPokemon] Failed to register Pokemon %s (#%d): %v", pkmn.Name, pkmn.ID, err)
-        return fmt.Errorf("failed to register Pokemon: %w", err)
+        return
     }
     log.Printf("✅ [RegisterPokemon] Successfully registered Pokemon %s (#%d)", pkmn.Name, pkmn.ID)
-    return nil
 }
