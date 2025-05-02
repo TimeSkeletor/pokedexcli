@@ -1,8 +1,10 @@
 package commands
 
 import (
-	"fmt"
 	"errors"
+	"fmt"
+
+	"math/rand"
 
 	"github.com/timeskeletor/pokedexcli/config"
 )
@@ -23,12 +25,30 @@ func (c catchCommand) GetCallback(cfg *config.Config, args ...string) error {
 	}
 
 	name := args[0]
-	pkmn, err := cfg.PokeapiClient.GetPokemon(name)
+	pkmn, err := cfg.PokeapiClient.GetPokemonSpecies(name)
 	if err != nil {
 		return err
 	}
-	fmt.Println("Throwing a Pokeball at", pkmn.Name, "...")
+	fmt.Printf("Throwing a Pokeball at %s...\n", pkmn.Name)
 
+	roll := rand.Intn(256)
+	isShiny := rand.Intn(4096) == 0
 
+	if roll <= pkmn.CaptureRate {
+		fmt.Println("Gotcha! You caught", pkmn.Name)
+		if isShiny {
+			fmt.Println("✨ Whoa! It's a shiny", pkmn.Name + "!")
+		}
+	
+		cfg.CaughtPkmn[pkmn.Name] = pkmn
+		cfg.PokeDb.RegisterPokemon(pkmn, true, isShiny)
+		return nil
+	
+	} else {
+		cfg.PokeDb.RegisterPokemon(pkmn, false, isShiny)
+		fmt.Println(pkmn.Name, "escaped!")
+	}
+
+		
 	return nil
 }

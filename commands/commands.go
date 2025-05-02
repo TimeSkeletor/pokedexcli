@@ -17,8 +17,8 @@ func GetCommands() map[string]Command {
 		"catch":   catchCommand{},
 		"help":    helpCommand{},
 		"explore": exploreCommand{},
-		"map": mapbCommand{},
-		"mapb": mapfCommand{},
+		"map": mapfCommand{},
+		"mapb": mapbCommand{},
 		"exit": exitCommand{},
 	}
 }

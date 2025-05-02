@@ -49,7 +49,7 @@ func (c *Client) GenericGetList(pageURL *string, path  string) (PaginationRespon
 }
 
 func (c *Client) GetLocation(locationName string) (Location, error) {
-	url := baseURL + "/location-area/" + locationName
+	url := baseURL + "location-area/" + locationName
 
 	if val, ok := c.cache.Get(url); ok {
 		locationResp := Location{}
@@ -88,7 +88,7 @@ func (c *Client) GetLocation(locationName string) (Location, error) {
 }
 
 func (c *Client) GetPokemon(pokemonName string) (Pokemon, error) {
-	url := baseURL + "/pokemon/" + pokemonName
+	url := baseURL + "pokemon/" + pokemonName
 
 	if val, ok := c.cache.Get(url); ok {
 		res := Pokemon{}
@@ -119,6 +119,46 @@ func (c *Client) GetPokemon(pokemonName string) (Pokemon, error) {
 	err = json.Unmarshal(dat, &res)
 	if err != nil {
 		return Pokemon{}, err
+	}
+
+	c.cache.Add(url, dat)
+
+	return res, nil
+}
+
+
+func (c *Client) GetPokemonSpecies(pokemonName string) (PokemonSpecies, error) {
+	url := baseURL + "pokemon-species/" + pokemonName
+
+	if val, ok := c.cache.Get(url); ok {
+		res := PokemonSpecies{}
+		err := json.Unmarshal(val, &res)
+		if err != nil {
+			return PokemonSpecies{}, err
+		}
+		return res, nil
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return PokemonSpecies{}, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return PokemonSpecies{}, err
+	}
+	defer resp.Body.Close()
+
+	dat, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return PokemonSpecies{}, err
+	}
+
+	res := PokemonSpecies{}
+	err = json.Unmarshal(dat, &res)
+	if err != nil {
+		return PokemonSpecies{}, err
 	}
 
 	c.cache.Add(url, dat)

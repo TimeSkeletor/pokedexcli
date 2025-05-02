@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"crawshaw.io/sqlite"
 	"crawshaw.io/sqlite/sqlitex"
@@ -13,10 +14,45 @@ const (
 	dbName = "pokedex.db"
 )
 
-func SetDb() {
-	if err := withConnTxFn(createTables, getTables()); err != nil {
-		log.Fatalf("failed to setup DB: %v", err)
-	}
+type Database struct {
+    pool *sqlitex.Pool
+    mu   sync.Mutex // Protect pool initialization
+}
+
+func New() *Database {
+    db := &Database{}
+    if err := db.setDb(); err != nil {
+        log.Fatalf("failed to setup DB: %v", err)
+    }
+    return db
+}
+
+func (db *Database) setDb() error {
+    db.mu.Lock()
+    defer db.mu.Unlock()
+
+    if db.pool != nil {
+        return nil // Pool already initialized
+    }
+
+    pool, err := sqlitex.Open(dbName, sqlite.SQLITE_OPEN_CREATE|sqlite.SQLITE_OPEN_READWRITE, 10)
+    if err != nil {
+        return fmt.Errorf("failed to open DB pool: %w", err)
+    }
+    db.pool = pool
+
+    return withConnTxFn(db.pool, createTables, getTables())
+}
+
+func (db *Database) Close() error {
+    db.mu.Lock()
+    defer db.mu.Unlock()
+
+    if db.pool != nil {
+        db.pool.Close()
+        db.pool = nil
+    }
+    return nil
 }
 
 func getConn() (*sqlite.Conn, error) {
@@ -33,18 +69,23 @@ func getConn() (*sqlite.Conn, error) {
 	return conn, nil
 }
 
-func withConnTxFn[T any](fn func(*sqlite.Conn, T) error, arg T) error {
-	conn, err := getConn()
-	if err != nil {
-		return fmt.Errorf("failed to get connection: %w", err)
-	}
-	defer conn.Close()
+func withConnTxFn[T any](pool *sqlitex.Pool, fn func(*sqlite.Conn, T) error, arg T) error {
+    conn := pool.Get(nil)
+    if conn == nil {
+        return fmt.Errorf("failed to get connection from pool")
+    }
+    defer pool.Put(conn)
 
-	if err := fn(conn, arg); err != nil {
-		_ = sqlitex.Exec(conn, "ROLLBACK;", nil)
-		return err
-	}
-	return sqlitex.Exec(conn, "COMMIT;", nil)
+    if err := sqlitex.ExecTransient(conn, "BEGIN;", nil); err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+
+    if err := fn(conn, arg); err != nil {
+        sqlitex.ExecTransient(conn, "ROLLBACK;", nil)
+        return err
+    }
+
+    return sqlitex.ExecTransient(conn, "COMMIT;", nil)
 }
 
 func createTables(conn *sqlite.Conn, tables map[string]table) error {

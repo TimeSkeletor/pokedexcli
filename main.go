@@ -12,7 +12,8 @@ func main() {
 	pokeClient := pokeapi.NewClient(5*time.Second, time.Minute*5)
 	cfg := &config.Config{
 		PokeapiClient: pokeClient,
+		PokeDb: pokedatabase.New(),
+		CaughtPkmn: make(map[string]pokeapi.PokemonSpecies),
 	}
-	pokedatabase.SetDb()
 	startRepl(cfg)
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/timeskeletor/pokedexcli/internal/pokeapi"
+	"github.com/timeskeletor/pokedexcli/internal/pokedatabase"
 )
 
 
@@ -11,7 +12,9 @@ const (
 
 
 type Config struct {
-	PokeapiClient    pokeapi.Client
-	NextPageURL *string
-	PrevPageURL *string
+	PokeapiClient	 pokeapi.Client
+	PokeDb			*pokedatabase.Database
+	CaughtPkmn		map[string]pokeapi.PokemonSpecies
+	NextPageURL 	*string
+	PrevPageURL 	*string
 }
