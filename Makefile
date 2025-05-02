@@ -10,5 +10,10 @@ test:
 	go test ./...
 
 setup:
+	echo "Updating assets..."
 	chmod +x scripts/setup_assets.sh
 	./scripts/setup_assets.sh
+
+removelock:
+	echo "Deleting .git/index.lock..."
+	rm .git/index.lock
