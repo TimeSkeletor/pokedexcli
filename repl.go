@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/timeskeletor/pokedexcli/config"
-	"github.com/timeskeletor/pokedexcli/commands"
+	"github.com/timeskeletor/pokedexcli/internal/commands"
 )
 
 func startRepl(cfg *config.Config) {

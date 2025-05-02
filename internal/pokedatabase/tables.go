@@ -8,11 +8,11 @@ type field struct {
     dataType   string
 }
 
-func getTables() map[string]table {
+func (db *Database) getTables() map[string]table {
 	return map[string]table{
 		"pokemon": {
 			fields: map[string]field{
-				"id": 			  {dataType: "integer primary key autoincrement",},
+				"id": 			  { dataType: "integer primary key autoincrement",},
 				"number":         { dataType: "integer unique" },
 				"name":           { dataType: "text unique" },
 				"gender":         { dataType: "integer" },
@@ -22,10 +22,10 @@ func getTables() map[string]table {
 				"is_legendary":   { dataType: "boolean" },
 				"is_mythical":    { dataType: "boolean" },
 				"is_shiny":       { dataType: "boolean" },
-				"sprite_path":     { dataType: "text" },
+				"sprite_path":    { dataType: "text" },
 				"caught":         { dataType: "boolean default 0" },
 				"caught_at":   	  { dataType: "datetime" },
-				"registered_at":   { dataType: "datetime DEFAULT current_timestamp not null" },
+				"registered_at":  { dataType: "datetime DEFAULT current_timestamp not null" },
 			},
 		},
 	}

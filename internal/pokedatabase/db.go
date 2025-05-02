@@ -1,114 +1,127 @@
 package pokedatabase
 
 import (
-	"fmt"
-	"log"
-	"strings"
-	"sync"
+    "context"
+    "fmt"
+    "strings"
+    "sync"
 
-	"crawshaw.io/sqlite"
-	"crawshaw.io/sqlite/sqlitex"
+    "crawshaw.io/sqlite"
+    "crawshaw.io/sqlite/sqlitex"
 )
 
 const (
-	dbName = "pokedex.db"
+    dbName = "pokedex.db"
 )
 
 type Database struct {
     pool *sqlitex.Pool
-    mu   sync.Mutex // Protect pool initialization
+    mu   sync.Mutex
 }
 
-func New() *Database {
-    db := &Database{}
-    if err := db.setDb(); err != nil {
-        log.Fatalf("failed to setup DB: %v", err)
-    }
-    return db
-}
-
-func (db *Database) setDb() error {
+func (db *Database) safeAccess() {
     db.mu.Lock()
     defer db.mu.Unlock()
+}
 
+func (db *Database) SetConn() error {
+    db.safeAccess()
     if db.pool != nil {
-        return nil // Pool already initialized
+        return nil
     }
-
     pool, err := sqlitex.Open(dbName, sqlite.SQLITE_OPEN_CREATE|sqlite.SQLITE_OPEN_READWRITE, 10)
     if err != nil {
         return fmt.Errorf("failed to open DB pool: %w", err)
     }
     db.pool = pool
-
-    return withConnTxFn(db.pool, createTables, getTables())
+    return nil
 }
 
-func (db *Database) Close() error {
-    db.mu.Lock()
-    defer db.mu.Unlock()
-
+func (db *Database) CloseConn() error {
+    db.safeAccess()
     if db.pool != nil {
-        db.pool.Close()
+        err := db.pool.Close()
         db.pool = nil
+        return err
     }
     return nil
 }
 
-func getConn() (*sqlite.Conn, error) {
-	conn, err := sqlite.OpenConn(dbName, sqlite.SQLITE_OPEN_CREATE|sqlite.SQLITE_OPEN_READWRITE)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open DB: %w", err)
-	}
-
-	if err := sqlitex.Exec(conn, "BEGIN;", nil); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	return conn, nil
+func (db *Database) SetDb(ctx context.Context) error {
+    if err := db.SetConn(); err != nil {
+        return err
+    }
+    return db.WithTransaction(ctx, func(conn *sqlite.Conn) error {
+        return db.createTables(conn)
+    })
 }
 
-func withConnTxFn[T any](pool *sqlitex.Pool, fn func(*sqlite.Conn, T) error, arg T) error {
-    conn := pool.Get(nil)
-    if conn == nil {
-        return fmt.Errorf("failed to get connection from pool")
+func (db *Database) ExecQuery(ctx context.Context, query string, resultFn func(stmt *sqlite.Stmt) error, args ...interface{}) error {
+    if err := ctx.Err(); err != nil {
+        return fmt.Errorf("context error: %w", err)
     }
-    defer pool.Put(conn)
+    conn, err := db.getConn(ctx)
+    if err != nil {
+        return err
+    }
+    defer db.pool.Put(conn)
+    if len(args) != strings.Count(query, "?") {
+        return fmt.Errorf("query expects %d arguments, got %d", strings.Count(query, "?"), len(args))
+    }
+    return sqlitex.Exec(conn, query, resultFn, args...)
+}
 
+
+func (db *Database) WithTransaction(ctx context.Context, fn func(*sqlite.Conn) error) error {
+    if err := ctx.Err(); err != nil {
+        return fmt.Errorf("context error: %w", err)
+    }
+    conn, err := db.getConn(ctx)
+    if err != nil {
+        return err
+    }
+    defer db.pool.Put(conn)
     if err := sqlitex.ExecTransient(conn, "BEGIN;", nil); err != nil {
         return fmt.Errorf("failed to begin transaction: %w", err)
     }
-
-    if err := fn(conn, arg); err != nil {
+    if err := fn(conn); err != nil {
         sqlitex.ExecTransient(conn, "ROLLBACK;", nil)
         return err
     }
-
     return sqlitex.ExecTransient(conn, "COMMIT;", nil)
 }
 
-func createTables(conn *sqlite.Conn, tables map[string]table) error {
-	for name, table := range tables {
-		stmt := prepareTable(name, table)
-		err := sqlitex.ExecScript(conn, stmt)
+func (db *Database) getConn(ctx context.Context) (*sqlite.Conn, error) {
+    db.mu.Lock()
+    if db.pool == nil {
+        db.mu.Unlock()
+        return nil, fmt.Errorf("database pool not initialized; call SetConn first")
+    }
+    conn := db.pool.Get(ctx)
+    db.mu.Unlock()
+    if conn == nil {
+        return nil, fmt.Errorf("failed to get connection from pool")
+    }
+    return conn, nil
+}
 
-		if err != nil {
-			return fmt.Errorf("failed to execute script: %w", err)
-		}
-	}
-	return nil
+func (db *Database) createTables(conn *sqlite.Conn) error {
+    for name, table := range db.getTables() {
+        stmt := prepareTable(name, table)
+        if err := sqlitex.ExecScript(conn, stmt); err != nil {
+            return fmt.Errorf("failed to execute script for table %s: %w", name, err)
+        }
+    }
+    return nil
 }
 
 func prepareTable(name string, t table) string {
-	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", name)
-
-	fields := []string{}
-	for fieldName, field := range t.fields {
-		fields = append(fields, fmt.Sprintf("    %s %s", fieldName, field.dataType))
-	}
-
-	stmt += strings.Join(fields, ",\n")
-	stmt += "\n);"
-	return stmt
+    stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", name)
+    fields := []string{}
+    for fieldName, field := range t.fields {
+        fields = append(fields, fmt.Sprintf("    %s %s", fieldName, field.dataType))
+    }
+    stmt += strings.Join(fields, ",\n")
+    stmt += "\n);"
+    return stmt
 }

@@ -1,15 +1,14 @@
 package pokedatabase
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
-	"strconv"
 	"time"
 
 	"crawshaw.io/sqlite"
 	"crawshaw.io/sqlite/sqlitex"
-
 	"github.com/timeskeletor/pokedexcli/internal/pokeapi"
 )
 
@@ -29,138 +28,71 @@ func getGender(genderRate int) int {
 	return 0
 }
 
-func (db *Database) isRegistered(identifier string) (found bool, wasCaught bool, err error) {
-    log.Printf("🔍 [isRegistered] Start: identifier=%s", identifier)
-
-    conn := db.pool.Get(nil)
-    if conn == nil {
-        log.Printf("❌ [isRegistered] Failed to get connection from pool")
-        return false, false, fmt.Errorf("failed to get connection from pool")
+func (db *Database) FetchPokemon(ctx context.Context, table string, number int) (int, string, error) {
+    if table != "pokemon" {
+        return 0, "", fmt.Errorf("invalid table name: %s", table)
     }
-    defer db.pool.Put(conn)
-
-	stmt := `
-	SELECT id, name, caught
-	FROM pokemon 
-	WHERE number = ? OR name = ?
-	LIMIT 1
-	`
-
-    var id int64
-    var name string
-    var caughtInt int64
-    callbackCount := 0
-
-    err = sqlitex.Exec(conn, stmt, func(stmt *sqlite.Stmt) error {
-        callbackCount++
-        log.Printf("🔍 [isRegistered] Callback invoked %d time(s)", callbackCount)
-        if ok, err := stmt.Step(); err != nil {
-            log.Printf("❌ [isRegistered] Error stepping through result: %v", err)
-            return err
-        } else if !ok {
-            log.Printf("ℹ️ [isRegistered] No Pokémon found in DB")
-            return nil
-        }
-
-        id = stmt.ColumnInt64(0)
-        name = stmt.ColumnText(1)
-        caughtInt = stmt.ColumnInt64(2)
-        found = true
-        wasCaught = caughtInt != 0
-        log.Printf("✅ [isRegistered] Found Pokémon: ID=%d, Name=%s, WasCaught=%v", id, name, wasCaught)
+    query := "SELECT number, name FROM pokemon WHERE number = ? LIMIT 1"
+    var foundNumber int
+    var foundName string
+    err := db.ExecQuery(ctx, query, func(stmt *sqlite.Stmt) error {
+        foundNumber = int(stmt.GetInt64("number"))
+        foundName = stmt.GetText("name")
         return nil
-    }, identifier, identifier)
-
+    }, number)
     if err != nil {
-        log.Printf("❌ [isRegistered] Error during lookup: %v", err)
-        return false, false, fmt.Errorf("failed to find pokemon: %v", err)
+        log.Printf("ℹ️ [FetchPokemon] No Pokemon found for number %d: %v", number, err)
+        return 0, "", fmt.Errorf("failed to fetch Pokemon: %w", err)
+    }
+    if foundNumber == 0 {
+        log.Printf("ℹ️ [FetchPokemon] No Pokemon found for number %d", number)
+        return 0, "", fmt.Errorf("pokemon not found")
+    }
+    return foundNumber, foundName, nil
+}
+
+func (db *Database) CatchPokemon(ctx context.Context, table string, number int) error {
+    if table != "pokemon" {
+        return fmt.Errorf("invalid table name: %s", table)
+    }
+    log.Printf("📌 Updating caught status for Pokemon #%d", number)
+
+    // Check if Pokemon exists
+    _, _, err := db.FetchPokemon(ctx, table, number)
+    if err != nil {
+        log.Printf("ℹ️ [CatchPokemon] No Pokemon found for number %d: %v", number, err)
+        return fmt.Errorf("pokemon not found: %w", err)
     }
 
-    log.Printf("🔍 [isRegistered] Completed: callbackCount=%d, found=%v, wasCaught=%v", callbackCount, found, wasCaught)
-    return found, wasCaught, nil
+    // Update in a transaction for atomicity
+    caughtAt := time.Now().Format("2006-01-02 15:04:05") // SQLite-compatible format
+    query := "UPDATE pokemon SET caught = ?, caught_at = ? WHERE number = ?"
+    return db.WithTransaction(ctx, func(conn *sqlite.Conn) error {
+        return sqlitex.Exec(conn, query, nil, 1, caughtAt, number)
+    })
 }
 
-func updateCaughtStatus(conn *sqlite.Conn, number int, caughtAt time.Time) error {
-	log.Printf("📌 Updating caught status for Pokémon #%d at %s", number, caughtAt.Format(time.RFC3339))
+func (db *Database) RegisterPokemon(ctx context.Context, pkmn pokeapi.PokemonSpecies, caught bool, isShiny bool) error {
+    log.Printf("📥 [RegisterPokemon] Inserting Pokemon %s (#%d) into DB [Caught: %v, Shiny: %v]", pkmn.Name, pkmn.ID, caught, isShiny)
 
-	stmt := `
-	UPDATE pokemon
-	SET caught = 1, caught_at = ?
-	WHERE number = ?
-	`
-	err := sqlitex.Exec(conn, stmt, nil, caughtAt, number)
-	if err != nil {
-		log.Printf("❌ Failed to update caught status: %v", err)
-	}
-	return err
-}
-
-func catchQuery(conn *sqlite.Conn, pkmn pokeapi.PokemonSpecies, caught bool, isShiny bool) error {
-    log.Printf("📥 [catchQuery] Inserting Pokémon %s (#%d) into DB [Caught: %v, Shiny: %v]", pkmn.Name, pkmn.ID, caught, isShiny)
-
-    stmt := `INSERT INTO pokemon 
+    query := `INSERT INTO pokemon 
     (number, name, gender, capture_rate, base_happiness, is_baby, is_legendary, is_mythical, is_shiny, sprite_path, caught, caught_at) 
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
     gender := getGender(pkmn.GenderRate)
-    pkmnSpritePath := asset_path + strconv.Itoa(pkmn.ID) + img_type
-
+    pkmnSpritePath := asset_path + fmt.Sprintf("%d%s", pkmn.ID, img_type)
     var caughtAt interface{}
     if caught {
-        caughtAt = time.Now()
+        caughtAt = time.Now().Format("2006-01-02 15:04:05")
     } else {
-        caughtAt = nil
+        caughtAt = nil // NULL for uncaught Pokemon
     }
 
-    err := sqlitex.ExecTransient(
-        conn,
-        stmt,
-        nil, // No callback needed for INSERT
-        pkmn.ID,
-        pkmn.Name,
-        gender,
-        pkmn.CaptureRate,
-        pkmn.BaseHappiness,
-        pkmn.IsBaby,
-        pkmn.IsLegendary,
-        pkmn.IsMythical,
-        isShiny,
-        pkmnSpritePath,
-        caught,
-        caughtAt,
-    )
-
+    err := db.ExecQuery(ctx, query, nil, pkmn.ID, pkmn.Name, gender, pkmn.CaptureRate, pkmn.BaseHappiness, pkmn.IsBaby, pkmn.IsLegendary, pkmn.IsMythical, isShiny, pkmnSpritePath, caught, caughtAt)
     if err != nil {
-        log.Printf("❌ [catchQuery] Failed to insert Pokémon %s (#%d): %v", pkmn.Name, pkmn.ID, err)
-    } else {
-        log.Printf("✅ [catchQuery] Successfully inserted Pokémon %s (#%d)", pkmn.Name, pkmn.ID)
+        log.Printf("❌ [RegisterPokemon] Failed to register Pokemon %s (#%d): %v", pkmn.Name, pkmn.ID, err)
+        return fmt.Errorf("failed to register Pokemon: %w", err)
     }
-
-    return err
-}
-
-func (db *Database) RegisterPokemon(pkmn pokeapi.PokemonSpecies, caught bool, isShiny bool) error {
-    log.Printf("🚀 [RegisterPokemon] Registering Pokémon: %s (#%d) | Caught: %v | Shiny: %v", pkmn.Name, pkmn.ID, caught, isShiny)
-
-    return withConnTxFn(db.pool, func(conn *sqlite.Conn, _ struct{}) error {
-        found, wasCaught, err := db.isRegistered(strconv.Itoa(pkmn.ID))
-        if err != nil {
-            log.Printf("❌ [RegisterPokemon] isRegistered failed: %v", err)
-            return err
-        }
-
-        if !found {
-            log.Printf("📄 [RegisterPokemon] Pokémon not found. Proceeding with insertion...")
-            return catchQuery(conn, pkmn, caught, isShiny)
-        }
-
-        log.Printf("📄 [RegisterPokemon] Pokémon already registered. Checking caught status...")
-        if caught && !wasCaught {
-            log.Printf("📌 [RegisterPokemon] Updating caught status...")
-            return updateCaughtStatus(conn, pkmn.ID, time.Now())
-        }
-
-        log.Printf("ℹ️ [RegisterPokemon] No update needed for %s (#%d) — Already caught: %v", pkmn.Name, pkmn.ID, wasCaught)
-        return nil
-    }, struct{}{})
+    log.Printf("✅ [RegisterPokemon] Successfully registered Pokemon %s (#%d)", pkmn.Name, pkmn.ID)
+    return nil
 }

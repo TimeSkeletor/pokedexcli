@@ -1,8 +1,9 @@
-run: setup
-	echo "Running..."
-	go build
-
+run:
 	./pokedexcli
+
+build: setup
+	echo "Building..."
+	go build
 
 test:
 	echo "Testing..."
