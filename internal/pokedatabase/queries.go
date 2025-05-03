@@ -49,6 +49,27 @@ func (db *Database) FetchPokemon(ctx context.Context, table string, number int) 
     return caught
 }
 
+func (db *Database) FetchAllRegisteredPokemon(ctx context.Context, table string) ([]string, error) {
+    if table != "pokemon" {
+        panic(fmt.Sprintf("invalid table name: %s", table))
+    }
+
+    query := "SELECT name FROM pokemon WHERE caught = 1"
+    var names []string
+
+    err := db.ExecQuery(ctx, query, func(stmt *sqlite.Stmt) error {
+        name := stmt.GetText("name")
+        names = append(names, name)
+        return nil
+    })
+    if err != nil {
+        log.Printf("ℹ️ [FetchAllRegisteredPokemon] Error: %v", err)
+        return nil, err
+    }
+    return names, nil
+}
+
+
 func (db *Database) CatchPokemon(ctx context.Context, table string, number int, isShiny bool) error {
     if table != "pokemon" {
         panic(fmt.Sprintf("invalid table name: %s", table))

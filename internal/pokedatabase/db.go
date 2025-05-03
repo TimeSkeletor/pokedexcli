@@ -65,7 +65,6 @@ func (db *Database) ExecQuery(ctx context.Context, query string, resultFn func(s
     return sqlitex.Exec(conn, query, resultFn, args...)
 }
 
-
 func (db *Database) WithTransaction(ctx context.Context, fn func(*sqlite.Conn) error) error {
     if err := ctx.Err(); err != nil {
         return fmt.Errorf("context error: %w", err)

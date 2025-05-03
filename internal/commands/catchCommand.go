@@ -51,10 +51,11 @@ func (c catchCommand) GetCallback(cfg *config.Config, args ...string) error {
 
         if captureChance {
             fmt.Println("Gotcha! You caught", pkmn.Name)
+            cfg.PokeDb.CatchPokemon(ctx, "pokemon", pkmn.ID, isShiny)
             if isShiny {
                 fmt.Println("✨ Whoa! It's a shiny", pkmn.Name+"!")
             }
-            cfg.PokeDb.CatchPokemon(ctx, "pokemon", pkmn.ID, isShiny)
+            fmt.Println("You may now inspect it with the inspect command.")
             return nil
         }
         fmt.Println(pkmn.Name, "escaped!")

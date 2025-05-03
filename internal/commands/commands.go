@@ -20,6 +20,7 @@ func GetCommands() map[string]Command {
 		"inspect": inspectCommand{},
 		"map": mapfCommand{},
 		"mapb": mapbCommand{},
+		"pokedex": pokedexCommand{},
 		"exit": exitCommand{},
 	}
 }
