@@ -5,57 +5,57 @@ import (
 	"time"
 )
 
-type Cache struct {
-	cache map[string]cacheEntry
-	mux *sync.Mutex
+type Cache[T any] struct {
+	cache map[string]cacheEntry[T]
+	mux   *sync.Mutex
 }
 
-type cacheEntry struct {
+type cacheEntry[T any] struct {
 	createdAt time.Time
-	val []byte
+	val       T
 }
 
-func NewCache(interval time.Duration) Cache {
-	c := Cache{
-		cache: make(map[string]cacheEntry),
-		mux: &sync.Mutex{},
-	} 
+func NewCache[T any](interval time.Duration) *Cache[T] {
+	c := &Cache[T]{
+		cache: make(map[string]cacheEntry[T]),
+		mux:   &sync.Mutex{},
+	}
 
 	go c.reapLoop(interval)
 	return c
 }
 
-func(c *Cache) Add(key string, value []byte) {
+func (c *Cache[T]) Add(key string, value T) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	newEntry := cacheEntry{
+	c.cache[key] = cacheEntry[T]{
 		createdAt: time.Now(),
-		val: value,
+		val:       value,
 	}
-	c.cache[key] = newEntry
 }
 
-func(c *Cache) Get(key string) ([]byte, bool) {
+func (c *Cache[T]) Get(key string) (T, bool) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	value, ok := c.cache[key]
-	return value.val, ok
+	entry, ok := c.cache[key]
+	return entry.val, ok
 }
 
-func (c *Cache) reapLoop(interval time.Duration) {
+func (c *Cache[T]) reapLoop(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
-		c.reap(time.Now().UTC(), interval)
+		c.reap(time.Now(), interval)
 	}
 }
 
-func (c *Cache) reap(now time.Time, last time.Duration) {
+func (c *Cache[T]) reap(now time.Time, maxAge time.Duration) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
+
 	for k, v := range c.cache {
-		if v.createdAt.Before(now.Add(-last)) {
+		if now.Sub(v.createdAt) > maxAge {
 			delete(c.cache, k)
 		}
 	}

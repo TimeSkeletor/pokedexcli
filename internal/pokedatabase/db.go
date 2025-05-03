@@ -16,29 +16,23 @@ const (
 
 type Database struct {
     pool *sqlitex.Pool
-    mu   sync.Mutex
-}
-
-func (db *Database) safeAccess() {
-    db.mu.Lock()
-    defer db.mu.Unlock()
+    mu   sync.RWMutex
+    once  sync.Once
 }
 
 func (db *Database) SetConn() error {
-    db.safeAccess()
-    if db.pool != nil {
-        return nil
-    }
-    pool, err := sqlitex.Open(dbName, sqlite.SQLITE_OPEN_CREATE|sqlite.SQLITE_OPEN_READWRITE, 10)
-    if err != nil {
-        return fmt.Errorf("failed to open DB pool: %w", err)
-    }
-    db.pool = pool
-    return nil
+    var err error
+    db.once.Do(func() {
+        db.mu.Lock()
+        defer db.mu.Unlock()
+        db.pool, err = sqlitex.Open(dbName, sqlite.SQLITE_OPEN_CREATE|sqlite.SQLITE_OPEN_READWRITE, 10)
+    })
+    return err
 }
-
 func (db *Database) CloseConn() error {
-    db.safeAccess()
+    db.mu.Lock()
+    defer db.mu.Unlock()
+
     if db.pool != nil {
         err := db.pool.Close()
         db.pool = nil

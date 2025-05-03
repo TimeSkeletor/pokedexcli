@@ -9,11 +9,12 @@ import (
 
 	"crawshaw.io/sqlite"
 	"crawshaw.io/sqlite/sqlitex"
+    
 	"github.com/timeskeletor/pokedexcli/internal/pokeapi"
 )
 
 const (
-	asset_path = "assets/pokemon-sprites/sprites/pokemon/versions/generation-viii/"
+	asset_path = "assets/pokemon-sprites/sprites/pokemon/versions/generation-viii/icons/"
 	img_type   = ".png"
 )
 
@@ -32,11 +33,13 @@ func (db *Database) FetchPokemon(ctx context.Context, table string, number int) 
     if table != "pokemon" {
         panic(fmt.Sprintf("invalid table name: %s", table))
     }
-    query := "SELECT caught FROM pokemon WHERE number = ? LIMIT 1"
+    query := "SELECT name, caught FROM pokemon WHERE number = ? LIMIT 1"
+    var name string
     var caught int
     err := db.ExecQuery(ctx, query, func(stmt *sqlite.Stmt) error {
+        name = stmt.GetText("name")
         caught = int(stmt.GetInt64("caught"))
-        log.Printf("ℹ️ [FetchPokemon] Pokémon #%d found, caught: %d", number, caught)
+        log.Printf("ℹ️ [FetchPokemon] Pokémon %s found, caught: %d", name, caught)
         return nil
     }, number)
     if err != nil {

@@ -16,6 +16,7 @@ func main() {
     cfg := &config.Config{
         PokeapiClient: pokeClient,
         PokeDb:        &pokedatabase.Database{},
+        PokeImage:     make(map[string]string),
         CaughtPkmn:    make(map[string]pokeapi.Pokemon),
     }
 

@@ -1,7 +1,11 @@
 run:
 	./pokedexcli
 
-build: setup
+build:
+	echo "Building..."
+	go build
+
+fullbuild: updateassets
 	echo "Building..."
 	go build
 
@@ -9,7 +13,7 @@ test:
 	echo "Testing..."
 	go test ./...
 
-setup:
+updateassets:
 	echo "Updating assets..."
 	chmod +x scripts/setup_assets.sh
 	./scripts/setup_assets.sh
